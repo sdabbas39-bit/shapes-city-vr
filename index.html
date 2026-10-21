@@ -1,0 +1,709 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>مدينة الأشكال VR</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=block">
+<style>
+  /* Layout: full-screen 3D scene with a small RTL heads-up panel on top. Single deliberate look (desert dusk). */
+  :root {
+    --sand: #e9d3a6;
+    --ink: #1d2b36;
+    --panel: rgba(18, 32, 44, 0.86);
+    --gold: #f4b63c;
+    --ok: #3fbf6f;
+    --warn: #ff8a5b;
+    --paper: #fff8ea;
+    --display: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: #0e1a24; color: var(--paper); font-family: var(--display); overflow: hidden; }
+  a-scene { position: fixed; inset: 0; }
+  #hud {
+    position: fixed; z-index: 5; direction: rtl;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: max(12px, env(safe-area-inset-right, 0px));
+    width: min(330px, calc(100vw - 24px));
+    background: var(--panel); border: 1px solid rgba(244, 182, 60, 0.35); border-radius: 14px;
+    padding: 10px 14px 12px; display: grid; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  #hud h1 { margin: 0; font-size: 20px; font-weight: 800; color: var(--gold); line-height: 1.3; text-wrap: balance; }
+  #stars { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #mission { font-size: 14px; line-height: 1.6; color: var(--paper); }
+  #hud .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  #hud button {
+    font: 700 13px var(--display); color: var(--ink); background: var(--sand); border: 0; border-radius: 999px;
+    padding: 5px 12px; cursor: pointer;
+  }
+  #hud button[aria-pressed="true"] { background: var(--gold); }
+  #hud button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+  #help { font-size: 13px; line-height: 1.7; margin: 0; padding-right: 18px; }
+  #toast {
+    position: fixed; z-index: 6; left: 50%; transform: translateX(-50%); direction: rtl;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); max-width: calc(100vw - 32px);
+    background: var(--panel); border-radius: 12px; padding: 10px 18px; font-size: 17px; font-weight: 700;
+    border: 2px solid var(--gold); text-align: center; transition: opacity .25s;
+  }
+  #toast.ok { border-color: var(--ok); } #toast.no { border-color: var(--warn); }
+  #loading { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: #0e1a24; font-size: 20px; direction: rtl; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+
+<div id="loading">جارٍ تجهيز مدينة الأشكال…</div>
+<div id="hud" aria-live="polite">
+  <h1>مدينة الأشكال</h1>
+  <div id="stars">النجوم: ٠ من ١٣</div>
+  <div id="mission"></div>
+  <div class="row">
+    <button id="helpBtn" type="button" aria-expanded="false" aria-controls="help">كيف ألعب؟</button>
+    <button id="phaseLearn" type="button">١ اكتشف</button>
+    <button id="faceStations" type="button">٢ تدرّب</button>
+    <button id="faceWorkshop" type="button">٣ ابنِ</button>
+  </div>
+  <ol id="help" hidden>
+    <li>اسحب بإصبعك أو بالفأرة لتنظر حولك.</li>
+    <li><b>اكتشف:</b> المس كل مجسم ليضغط على الرمل ويترك أثره، ثم افرز الأشكال المختلطة في سلال عائلاتها؛ اسم كل عائلة يظهر حين تكملها. زر «استمع» يقرأ السؤال.</li>
+    <li><b>تدرّب (المستكشف):</b> أمامك ٧ محطات وسفينة «بوم» في البحر. المس الاسم الصحيح تحت كل شكل، والمس بدن السفينة وشراعها.</li>
+    <li><b>ابنِ (البنّاء):</b> خلفك لوحة نقاط. المس النقاط واحدة بعد الأخرى لترسم الشكل المطلوب، ثم المس النقطة الأولى لإغلاقه. كل شكل صحيح يُركَّب في البيت البحريني.</li>
+    <li>زر <b>VR</b> أسفل الشاشة يفتح النظارة. داخلها انظر إلى الزر ثانية ونصفًا ليُضغط.</li>
+  </ol>
+</div>
+<div id="toast" style="opacity:0"></div>
+
+<a-scene id="scene" renderer="antialias: true; colorManagement: true" vr-mode-ui="enabled: true"
+  cursor="rayOrigin: mouse" raycaster="objects: .clickable" background="color: #9fd3f0" loading-screen="enabled: false">
+  <a-entity id="rig">
+    <a-entity id="cam" camera="near: 0.1; far: 400" position="0 1.6 0" look-controls="magicWindowTrackingEnabled: false; reverseMouseDrag: false">
+      <a-entity id="gaze" cursor="fuse: true; fuseTimeout: 1500" raycaster="objects: .clickable; enabled: false"
+        position="0 0 -1" geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.02"
+        material="color: #fff; shader: flat" visible="false"></a-entity>
+    </a-entity>
+  </a-entity>
+  <a-entity light="type: ambient; intensity: 0.75; color: #fff4e0"></a-entity>
+  <a-entity light="type: directional; intensity: 0.9; color: #fff" position="-4 8 3"></a-entity>
+  <a-entity id="world"></a-entity>
+</a-scene>
+
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.6.0/dist/aframe-v1.6.0.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var AR = function (n) { return String(n).replace(/\d/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'[d]; }); };
+  var NAMES = { tri: 'مثلث', rect: 'مستطيل', square: 'مربع', circle: 'دائرة', para: 'متوازي أضلاع', hex: 'شكل سداسي', trap: 'شبه منحرف', pent: 'شكل خماسي', quad: 'شكل رباعي' };
+  var TOTAL = 13, stars = 0;
+
+  // ---------- small helpers ----------
+  var dragged = false, downAt = null;
+  window.addEventListener('pointerdown', function (e) { downAt = [e.clientX, e.clientY]; dragged = false; }, true);
+  window.addEventListener('pointermove', function (e) {
+    if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 12) dragged = true;
+  }, true);
+  window.addEventListener('pointerup', function () { downAt = null; }, true);
+  function tapOk() { return !dragged; }
+
+  var actx = null;
+  function beep(ok) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      var notes = ok ? [523, 659, 784] : [300, 220];
+      notes.forEach(function (f, i) {
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.frequency.value = f; o.type = 'triangle';
+        g.gain.setValueAtTime(0.0001, actx.currentTime + i * 0.12);
+        g.gain.exponentialRampToValueAtTime(0.25, actx.currentTime + i * 0.12 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + i * 0.12 + 0.2);
+        o.connect(g).connect(actx.destination); o.start(actx.currentTime + i * 0.12); o.stop(actx.currentTime + i * 0.12 + 0.22);
+      });
+    } catch (e) { /* sound is optional */ }
+  }
+  var toastEl = document.getElementById('toast'), toastTimer = null;
+  function toast(msg, kind) {
+    toastEl.textContent = msg; toastEl.className = kind || ''; toastEl.style.opacity = 1;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.style.opacity = 0; }, 3200);
+  }
+  function addStar() {
+    stars++; document.getElementById('stars').textContent = 'النجوم: ' + AR(stars) + ' من ' + AR(TOTAL);
+    if (stars === TOTAL) setTimeout(function () { toast('أحسنت! أكملت مدينة الأشكال كلها 🎉', 'ok'); }, 900);
+  }
+
+  // canvas text texture (keeps Arabic letters joined and right-to-left)
+  AFRAME.registerComponent('ctext', {
+    schema: { text: { default: '' }, w: { default: 1 }, h: { default: 0.3 }, bg: { default: '#fff8ea' },
+              fg: { default: '#1d2b36' }, size: { default: 0.55 }, border: { default: '' }, radius: { default: 0.25 } },
+    init: function () {
+      this.canvas = document.createElement('canvas');
+      this.tex = new THREE.CanvasTexture(this.canvas);
+      this.tex.colorSpace = THREE.SRGBColorSpace;
+      this.tex.anisotropy = 4;
+      this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true }));
+      this.el.setObject3D('mesh', this.mesh);
+    },
+    update: function () {
+      var d = this.data, px = 512, W = Math.round(px * d.w), H = Math.round(px * d.h);
+      var c = this.canvas; c.width = W; c.height = H;
+      var g = c.getContext('2d'), r = Math.min(W, H) * d.radius;
+      g.clearRect(0, 0, W, H);
+      if (d.bg !== 'none') {
+        g.beginPath(); g.moveTo(r, 0); g.arcTo(W, 0, W, H, r); g.arcTo(W, H, 0, H, r); g.arcTo(0, H, 0, 0, r); g.arcTo(0, 0, W, 0, r); g.closePath();
+        g.fillStyle = d.bg; g.fill();
+        if (d.border) { g.lineWidth = Math.max(6, H * 0.06); g.strokeStyle = d.border; g.stroke(); }
+      }
+      g.fillStyle = d.fg; g.direction = 'rtl'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      var lines = d.text.split('\n'), fs = H * d.size / Math.max(1, lines.length * 0.85);
+      g.font = '800 ' + fs + 'px Cairo, sans-serif';
+      while (g.measureText(lines.reduce(function (a, b) { return a.length > b.length ? a : b; })).width > W * 0.92 && fs > 10) {
+        fs -= 2; g.font = '800 ' + fs + 'px Cairo, sans-serif';
+      }
+      lines.forEach(function (ln, i) { g.fillText(ln, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.15); });
+      this.mesh.scale.set(d.w, d.h, 1);
+      this.tex.needsUpdate = true;
+    }
+  });
+
+  function ent(parent, attrs) {
+    var e = document.createElement('a-entity');
+    Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    parent.appendChild(e); return e;
+  }
+
+  // flat polygon with a dark rim; pts = [[x,y],...] (convex) or circle radius
+  function polyMesh(pts, color, rim) {
+    var group = new THREE.Group(), cx = 0, cy = 0;
+    pts.forEach(function (p) { cx += p[0] / pts.length; cy += p[1] / pts.length; });
+    function shape(list, grow) {
+      var s = new THREE.Shape();
+      list.forEach(function (p, i) {
+        var dx = p[0] - cx, dy = p[1] - cy, L = Math.hypot(dx, dy) || 1;
+        var x = p[0] + dx / L * grow, y = p[1] + dy / L * grow;
+        if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
+      });
+      s.closePath(); return s;
+    }
+    var back = new THREE.Mesh(new THREE.ShapeGeometry(shape(pts, rim === undefined ? 0.07 : rim)), new THREE.MeshBasicMaterial({ color: '#1b1b1b' }));
+    var front = new THREE.Mesh(new THREE.ShapeGeometry(shape(pts, 0)), new THREE.MeshLambertMaterial({ color: color }));
+    front.position.z = 0.01; group.add(back); group.add(front);
+    return group;
+  }
+  function circlePts(r, n, rot) {
+    var a = []; for (var i = 0; i < n; i++) { var t = (rot || 0) + i * 2 * Math.PI / n; a.push([r * Math.cos(t), r * Math.sin(t)]); } return a;
+  }
+
+  // ---------- explorer stations ----------
+  var STATIONS = [
+    { id: 'tri', pts: [[-0.85, 0.75], [0.85, 0.75], [0, -0.8]], color: '#e2483d', opts: ['tri', 'trap', 'para'] },
+    { id: 'rect', pts: [[-0.42, -0.9], [0.42, -0.9], [0.42, 0.9], [-0.42, 0.9]], color: '#2f6fd6', opts: ['rect', 'square', 'para'] },
+    { id: 'square', pts: [[0, -0.85], [0.85, 0], [0, 0.85], [-0.85, 0]], color: '#7cc63a', opts: ['square', 'para', 'rect'] },
+    { id: 'circle', pts: circlePts(0.85, 64), color: '#f08a24', opts: ['circle', 'hex', 'square'] },
+    { id: 'para', pts: [[-0.9, -0.6], [0.3, -0.6], [0.9, 0.6], [-0.3, 0.6]], color: '#8b45c7', opts: ['para', 'rect', 'trap'] },
+    { id: 'hex', pts: circlePts(0.88, 6, Math.PI / 2), color: '#1aa6a6', opts: ['hex', 'circle', 'tri'] },
+    { id: 'trap', pts: [[-0.9, 0.6], [0.9, 0.6], [0.45, -0.6], [-0.45, -0.6]], color: '#f2c230', opts: ['trap', 'para', 'tri'] }
+  ];
+  var HINTS = { tri: 'عُدّ الأضلاع: ثلاثة أضلاع فقط.', rect: 'أربعة أضلاع وزوايا قائمة، لكن الأضلاع ليست متساوية.',
+    square: 'أدر رأسك! أربعة أضلاع متساوية وزوايا قائمة.', circle: 'هل له أضلاع؟', para: 'كل ضلعين متقابلين متوازيان، والشكل مائل.',
+    hex: 'عُدّ الأضلاع: ستة.', trap: 'ضلعان فقط متوازيان.' };
+
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  function makeNamingTarget(parent, def, optsY, optW) {
+    // parent: entity holding the shape at origin; options placed below at optsY
+    var solved = false, buttons = [];
+    shuffle(def.opts).forEach(function (k, i, arr) {
+      var x = (i - (arr.length - 1) / 2) * (optW + 0.08);
+      var b = ent(parent, { class: 'clickable', position: x + ' ' + optsY + ' 0.05',
+        ctext: 'text: ' + NAMES[k] + '; w: ' + optW + '; h: 0.3; bg: #fff8ea; border: #1d2b36' });
+      b.addEventListener('click', function () {
+        if (solved || !tapOk()) return;
+        if (k === def.id) {
+          solved = true; beep(true); addStar();
+          toast('صحيح: ' + NAMES[k] + ' — واسمه لا يتغير مهما دار!', 'ok');
+          buttons.forEach(function (o) { o.parentNode.removeChild(o); });
+          ent(parent, { position: '0 ' + optsY + ' 0.05', ctext: 'text: ✓ ' + NAMES[k] + '; w: 1.4; h: 0.34; bg: #3fbf6f; fg: #ffffff' });
+          if (def.spin) def.spin();
+        } else {
+          beep(false); toast('ليس ' + NAMES[k] + '. ' + HINTS[def.id], 'no');
+          b.setAttribute('animation__shake', 'property: position; from: ' + (x - 0.05) + ' ' + optsY + ' 0.05; to: ' + x + ' ' + optsY + ' 0.05; dur: 300; easing: easeOutElastic');
+        }
+      });
+      buttons.push(b);
+    });
+  }
+
+  function buildStations(world) {
+    var R = 8, angles = [-105, -70, -35, 0, 35, 70, 105];
+    STATIONS.forEach(function (s, i) {
+      var th = angles[i] * Math.PI / 180;
+      var st = ent(world, { position: (R * Math.sin(th)).toFixed(3) + ' 0 ' + (-R * Math.cos(th)).toFixed(3), rotation: '0 ' + (-angles[i]) + ' 0' });
+      ent(st, { geometry: 'primitive: box; width: 2.6; height: 3.3; depth: 0.35', material: 'color: #d9bd86; roughness: 1', position: '0 1.65 -0.2' });
+      ent(st, { geometry: 'primitive: box; width: 2.8; height: 0.18; depth: 0.5', material: 'color: #c7a46a', position: '0 3.35 -0.2' });
+      for (var k = 0; k <= i; k++) {
+        ent(st, { geometry: 'primitive: box; width: 0.18; height: 0.18; depth: 0.18', material: 'color: #f4b63c; metalness: 0.6; roughness: 0.3',
+          position: ((k - i / 2) * 0.26).toFixed(2) + ' 3.55 -0.2' });
+      }
+      var holder = ent(st, { position: '0 2.05 0' });
+      holder.object3D.add(polyMesh(s.pts, s.color));
+      s.spin = function () { holder.setAttribute('animation', 'property: rotation; from: 0 0 0; to: 0 0 360; dur: 2400; easing: easeInOutQuad'); };
+      makeNamingTarget(st, s, 0.6, 0.78);
+    });
+  }
+
+  // ---------- sea and boom boat ----------
+  function buildSea(world) {
+    ent(world, { geometry: 'primitive: ring; radiusInner: 0.01; radiusOuter: 16; segmentsTheta: 64; segmentsPhi: 16', material: 'color: #dcc08e; roughness: 1', rotation: '-90 0 0' });
+    ent(world, { geometry: 'primitive: ring; radiusInner: 16; radiusOuter: 90; segmentsTheta: 64; segmentsPhi: 8', material: 'color: #2f86c9; roughness: 0.4; metalness: 0.1', rotation: '-90 0 0', position: '0 -0.05 0' });
+    var ang = -17.5 * Math.PI / 180, R = 26;
+    var boat = ent(world, { position: (R * Math.sin(ang)).toFixed(2) + ' 0 ' + (-R * Math.cos(ang)).toFixed(2), rotation: '0 17.5 0' });
+    var hull = ent(boat, { position: '0 0.3 0', class: 'clickable' });
+    hull.setObject3D('mesh', polyMesh([[-3.6, 1.2], [3.6, 1.2], [2.0, -0.6], [-2.0, -0.6]], '#8a5a2b', 0.12));
+    ent(boat, { geometry: 'primitive: cylinder; radius: 0.09; height: 6', material: 'color: #5b3a1a', position: '0 4.4 -0.05' });
+    var sail = ent(boat, { position: '0.2 2.2 0.05', class: 'clickable' });
+    sail.setObject3D('mesh', polyMesh([[0, 0], [3.0, 0], [0, 4.6]], '#fbf6ea', 0.1));
+    var hullDef = { id: 'trap', opts: ['trap', 'rect', 'para'] }, sailDef = { id: 'tri', opts: ['tri', 'trap', 'square'] };
+    var panel = ent(boat, { position: '0 -1.1 0.2' });
+    var hullPanel = ent(panel, { position: '-2.4 0 0' }), sailPanel = ent(panel, { position: '2.4 0 0' });
+    ent(hullPanel, { position: '0 0.55 0.05', ctext: 'text: شكل البدن؟; w: 2.4; h: 0.45; bg: #12202c; fg: #f4b63c' });
+    ent(sailPanel, { position: '0 0.55 0.05', ctext: 'text: شكل الشراع؟; w: 2.4; h: 0.45; bg: #12202c; fg: #f4b63c' });
+    hullPanel.object3D.scale.set(1.6, 1.6, 1.6); sailPanel.object3D.scale.set(1.6, 1.6, 1.6);
+    makeNamingTarget(hullPanel, hullDef, 0, 0.78);
+    makeNamingTarget(sailPanel, sailDef, 0, 0.78);
+    hull.addEventListener('click', function () { if (tapOk()) toast('هذا بدن سفينة «البوم» البحرينية. اختر اسم شكله من اللوحة تحته.'); });
+    sail.addEventListener('click', function () { if (tapOk()) toast('هذا الشراع. اختر اسم شكله من اللوحة تحته.'); });
+    // palms for context
+    [[-12, -9], [12, -8], [-13, 6], [13, 7]].forEach(function (p) {
+      var palm = ent(world, { position: p[0] + ' 0 ' + p[1] });
+      ent(palm, { geometry: 'primitive: cylinder; radius: 0.18; height: 4', material: 'color: #8b6b43', position: '0 2 0' });
+      for (var a = 0; a < 6; a++) {
+        ent(palm, { geometry: 'primitive: cone; radiusBottom: 0.25; radiusTop: 0.02; height: 2.2', material: 'color: #2f8f46',
+          position: '0 4 0', rotation: '0 ' + (a * 60) + ' 70' });
+      }
+    });
+  }
+
+  // ---------- workshop: dot board + Bahraini house ----------
+  var MISSIONS = [
+    { part: 'الباب', need: 'rect', color: '#8a5a2b', slot: [0, -0.75, 0.62, 0.95] },
+    { part: 'النافذة', need: 'hex', color: '#5fb3d9', slot: [-0.68, 0.3, 0.6, 0.6] },
+    { part: 'الزخرفة فوق الباب', need: 'para', color: '#e2483d', slot: [0, 0.12, 0.7, 0.32] },
+    { part: 'السقف', need: 'trap', color: '#c47a2c', slot: [0, 1.62, 2.7, 0.65] }
+  ];
+  var mi = 0;
+
+  function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+  function segX(p1, p2, p3, p4) {
+    var d1 = cross(p3, p4, p1), d2 = cross(p3, p4, p2), d3 = cross(p1, p2, p3), d4 = cross(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  }
+  function classify(raw) {
+    // drop repeated and collinear corners so a dot in the middle of a side does not count as a corner
+    var p = raw.slice(), changed = true;
+    while (changed && p.length > 2) {
+      changed = false;
+      for (var i = 0; i < p.length; i++) {
+        var a = p[(i - 1 + p.length) % p.length], b = p[i], c = p[(i + 1) % p.length];
+        if ((a[0] === b[0] && a[1] === b[1]) || cross(a, b, c) === 0) { p.splice(i, 1); changed = true; break; }
+      }
+    }
+    var n = p.length;
+    if (n < 3) return { kind: null, msg: 'هذه ليست شكلًا مغلقًا. جرّب مرة أخرى.' };
+    for (var i2 = 0; i2 < n; i2++) for (var j = i2 + 1; j < n; j++) {
+      if (Math.abs(i2 - j) <= 1 || (i2 === 0 && j === n - 1)) continue;
+      if (segX(p[i2], p[(i2 + 1) % n], p[j], p[(j + 1) % n])) return { kind: null, msg: 'الأضلاع تتقاطع، فهذا ليس شكلًا مستويًا بسيطًا. جرّب مرة أخرى.' };
+    }
+    if (n === 3) return { kind: 'tri', pts: p };
+    if (n === 5) return { kind: 'pent', pts: p };
+    if (n === 6) return { kind: 'hex', pts: p };
+    if (n === 4) {
+      var v = function (a, b) { return [b[0] - a[0], b[1] - a[1]]; };
+      var par = function (u, w) { return u[0] * w[1] - u[1] * w[0] === 0; };
+      var s0 = v(p[0], p[1]), s1 = v(p[1], p[2]), s2 = v(p[2], p[3]), s3 = v(p[3], p[0]);
+      var A = par(s0, s2), B = par(s1, s3);
+      if (A && B) {
+        var right = s0[0] * s1[0] + s0[1] * s1[1] === 0;
+        var eq = s0[0] * s0[0] + s0[1] * s0[1] === s1[0] * s1[0] + s1[1] * s1[1];
+        return { kind: right ? (eq ? 'square' : 'rect') : 'para', pts: p };
+      }
+      if (A || B) return { kind: 'trap', pts: p };
+      return { kind: 'quad', pts: p };
+    }
+    return { kind: 'other', pts: p, msg: 'شكل له ' + AR(n) + ' أضلاع.' };
+  }
+
+  function buildWorkshop(world) {
+    var ws = ent(world, { position: '0 0 4.6', rotation: '0 180 0' });
+    // dot board (on the visitor's right when facing the workshop)
+    var board = ent(ws, { position: '1.75 0 0' });
+    ent(board, { geometry: 'primitive: box; width: 2.5; height: 2.5; depth: 0.1', material: 'color: #f5ecd7', position: '0 1.75 -0.06' });
+    ent(board, { geometry: 'primitive: box; width: 2.7; height: 2.7; depth: 0.06', material: 'color: #8a5a2b', position: '0 1.75 -0.12' });
+    ent(board, { geometry: 'primitive: cylinder; radius: 0.06; height: 1.2', material: 'color: #8a5a2b', position: '-0.9 0.25 -0.1' });
+    ent(board, { geometry: 'primitive: cylinder; radius: 0.06; height: 1.2', material: 'color: #8a5a2b', position: '0.9 0.25 -0.1' });
+    var sign = ent(board, { position: '0 3.35 0', ctext: 'text: ; w: 2.7; h: 0.55; bg: #12202c; fg: #f4b63c' });
+    var N = 7, gap = 0.32, linesGroup = new THREE.Group(), chosen = [], dots = [];
+    var lineHolder = ent(board, { position: '0 1.75 0.01' }); lineHolder.object3D.add(linesGroup);
+    function local(i, j) { return [(i - (N - 1) / 2) * gap, (j - (N - 1) / 2) * gap]; }
+    function redraw(closed) {
+      while (linesGroup.children.length) linesGroup.remove(linesGroup.children[0]);
+      if (closed && chosen.length >= 3) {
+        var m = polyMesh(chosen.map(function (c) { return local(c[0], c[1]); }), MISSIONS[Math.min(mi, 3)].color, 0.03);
+        linesGroup.add(m);
+      } else {
+        for (var k = 0; k + 1 < chosen.length; k++) {
+          var a = local(chosen[k][0], chosen[k][1]), b = local(chosen[k + 1][0], chosen[k + 1][1]);
+          var len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          var bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.045, 0.02), new THREE.MeshBasicMaterial({ color: '#1d2b36' }));
+          bar.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0.02); bar.rotation.z = Math.atan2(b[1] - a[1], b[0] - a[0]);
+          linesGroup.add(bar);
+        }
+      }
+      dots.forEach(function (d) {
+        var on = chosen.some(function (c) { return c[0] === d.i && c[1] === d.j; });
+        d.el.setAttribute('material', 'color', chosen.length && chosen[0][0] === d.i && chosen[0][1] === d.j ? '#f4b63c' : (on ? '#e2483d' : '#1d2b36'));
+      });
+    }
+    function setSign() {
+      if (mi < MISSIONS.length) sign.setAttribute('ctext', 'text', 'ابنِ ' + MISSIONS[mi].part + ': ' + NAMES[MISSIONS[mi].need]);
+      else sign.setAttribute('ctext', 'text', 'تحدي الدوران: ابنِ مربعًا مائلًا');
+    }
+    for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+      (function (i, j) {
+        var p = local(i, j);
+        var d = ent(board, { class: 'clickable', geometry: 'primitive: sphere; radius: 0.055', material: 'color: #1d2b36',
+          position: p[0].toFixed(3) + ' ' + (1.75 + p[1]).toFixed(3) + ' 0.03' });
+        dots.push({ el: d, i: i, j: j });
+        d.addEventListener('click', function () {
+          if (!tapOk()) return;
+          if (chosen.length >= 3 && chosen[0][0] === i && chosen[0][1] === j) { finish(); return; }
+          if (chosen.some(function (c) { return c[0] === i && c[1] === j; })) return;
+          chosen.push([i, j]); redraw(false);
+        });
+      })(i, j);
+    }
+    var clearBtn = ent(board, { class: 'clickable', position: '-0.65 0.15 0.08', ctext: 'text: مسح; w: 0.9; h: 0.3; bg: #ff8a5b; fg: #ffffff' });
+    clearBtn.addEventListener('click', function () { if (tapOk()) { chosen = []; redraw(false); } });
+    var closeBtn = ent(board, { class: 'clickable', position: '0.65 0.15 0.08', ctext: 'text: أغلق الشكل; w: 1.1; h: 0.3; bg: #3fbf6f; fg: #ffffff' });
+    closeBtn.addEventListener('click', function () { if (tapOk()) finish(); });
+
+    // Bahraini house facade (on the visitor's left)
+    var house = ent(ws, { position: '-1.75 0 0' });
+    ent(house, { geometry: 'primitive: box; width: 2.6; height: 2.9; depth: 0.3', material: 'color: #e3c99a; roughness: 1', position: '0 1.45 -0.2' });
+    ent(house, { position: '0 3.55 0', ctext: 'text: بيت الفريق; w: 1.8; h: 0.4; bg: #12202c; fg: #fff8ea' });
+    var facade = ent(house, { position: '0 1.45 0' });
+    MISSIONS.forEach(function (m) {
+      var s = m.slot;
+      ent(facade, { position: s[0] + ' ' + s[1] + ' 0.01', geometry: 'primitive: plane; width: ' + s[2] + '; height: ' + s[3],
+        material: 'color: #ffffff; opacity: 0.35; transparent: true; shader: flat' });
+      m.label = ent(facade, { position: s[0] + ' ' + s[1] + ' 0.02', ctext: 'text: ' + m.part + '؟; w: ' + Math.min(s[2], 0.9) + '; h: 0.16; bg: none; fg: #5a4630' });
+    });
+
+    function install(res) {
+      var m = MISSIONS[mi], s = m.slot, pts = res.pts.map(function (c) { return local(c[0], c[1]); });
+      var minX = Math.min.apply(null, pts.map(function (q) { return q[0]; })), maxX = Math.max.apply(null, pts.map(function (q) { return q[0]; }));
+      var minY = Math.min.apply(null, pts.map(function (q) { return q[1]; })), maxY = Math.max.apply(null, pts.map(function (q) { return q[1]; }));
+      var sc = Math.min(s[2] / (maxX - minX), s[3] / (maxY - minY));
+      var placed = pts.map(function (q) { return [(q[0] - (minX + maxX) / 2) * sc, (q[1] - (minY + maxY) / 2) * sc]; });
+      if (m.label) m.label.setAttribute('visible', false);
+      var holder = ent(facade, { position: s[0] + ' ' + s[1] + ' 0.05' });
+      holder.object3D.add(polyMesh(placed, m.color, 0.03));
+      holder.setAttribute('animation', 'property: scale; from: 0.2 0.2 0.2; to: 1 1 1; dur: 700; easing: easeOutBack');
+    }
+
+    function finish() {
+      if (chosen.length < 3) { toast('اختر ثلاث نقاط على الأقل، ثم المس النقطة الأولى لإغلاق الشكل.', 'no'); return; }
+      var raw = chosen.map(function (c) { return [c[0], c[1]]; });
+      var res = classify(raw);
+      redraw(true);
+      if (!res.kind || res.kind === 'other') { beep(false); toast(res.msg || 'جرّب مرة أخرى.', 'no'); setTimeout(function () { chosen = []; redraw(false); }, 1600); return; }
+      var name = NAMES[res.kind];
+      if (mi < MISSIONS.length) {
+        var need = MISSIONS[mi].need;
+        if (res.kind === need) {
+          beep(true); addStar(); install(res);
+          toast('ممتاز! بنيت ' + name + ' في مكان ' + MISSIONS[mi].part + '.', 'ok');
+          mi++; setSign(); document.getElementById('mission').textContent = mi < MISSIONS.length
+            ? 'المهمة التالية في الورشة: ابنِ ' + MISSIONS[mi].part + ' (' + NAMES[MISSIONS[mi].need] + ').'
+            : 'اكتمل البيت! جرّب تحدي الدوران: مربع مائل.';
+        } else {
+          beep(false);
+          var extra = need === 'rect' && res.kind === 'square' ? ' الباب يحتاج مستطيلًا: طوله أكبر من عرضه.' : '';
+          toast('رسمت ' + name + '، والمطلوب ' + NAMES[need] + '.' + extra, 'no');
+        }
+      } else {
+        var tilted = res.kind === 'square' && res.pts.every(function (q, k) { var r = res.pts[(k + 1) % 4]; return q[0] !== r[0] && q[1] !== r[1]; });
+        if (tilted) { beep(true); toast('رائع! مربع مائل وما زال اسمه مربعًا 🎉', 'ok'); }
+        else { beep(false); toast(res.kind === 'square' ? 'هذا مربع، لكنه ليس مائلًا. أدره!' : 'رسمت ' + name + '. المطلوب مربع مائل.', 'no'); }
+      }
+      setTimeout(function () { chosen = []; redraw(false); }, 1800);
+    }
+    setSign();
+  }
+
+  // ---------- discovery lab: the pupil finds the shapes and forms the groups; names come after ----------
+  var arabicVoice = null;
+  function pickVoice() {
+    try { arabicVoice = (speechSynthesis.getVoices() || []).filter(function (v) { return /^ar/i.test(v.lang); })[0] || null; } catch (e) {}
+  }
+  if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  function speak(text, manual) {
+    try {
+      if (!arabicVoice) { if (manual) toast('لا يوجد صوت عربي في هذا الجهاز؛ يقرأ القارئ في فريقك العبارة.', 'no'); return; }
+      speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text.replace(/\n/g, ' ')); u.voice = arabicVoice; u.lang = arabicVoice.lang; u.rate = 0.9;
+      speechSynthesis.speak(u);
+    } catch (e) { /* narration is optional */ }
+  }
+
+  // unit outlines (about 1 unit across); scaled where used
+  var U = {
+    square: [[-0.8, -0.8], [0.8, -0.8], [0.8, 0.8], [-0.8, 0.8]],
+    rect: [[-1, -0.55], [1, -0.55], [1, 0.55], [-1, 0.55]],
+    circle: circlePts(0.9, 40),
+    tri: [[-1, -0.8], [1, -0.8], [0, 0.9]],
+    hex: circlePts(0.95, 6, 0),
+    trap: [[-1, -0.6], [1, -0.6], [0.5, 0.6], [-0.5, 0.6]],
+    para: [[-1, -0.55], [0.4, -0.55], [1, 0.55], [-0.4, 0.55]]
+  };
+  var UCOL = { square: '#7cc63a', rect: '#2f6fd6', circle: '#f08a24', tri: '#e2483d', hex: '#1aa6a6', trap: '#f2c230', para: '#8b45c7' };
+  function rotPts(pts, deg, s, sx) {
+    var a = deg * Math.PI / 180, c = Math.cos(a), si = Math.sin(a);
+    return pts.map(function (p) { var x = p[0] * (sx || 1); return [(x * c - p[1] * si) * s, (x * si + p[1] * c) * s]; });
+  }
+
+  // tiny tween runner driven by the scene clock
+  var tweens = [];
+  function tween(dur, fn, done) { tweens.push({ t0: performance.now(), dur: dur, fn: fn, done: done }); }
+  AFRAME.registerComponent('lab-tick', {
+    tick: function () {
+      var now = performance.now(), finished = [];
+      tweens = tweens.filter(function (tw) {
+        var k = Math.min(1, (now - tw.t0) / tw.dur); tw.fn(ease(k));
+        if (k >= 1) { finished.push(tw); return false; }
+        return true;
+      });
+      finished.forEach(function (tw) { if (tw.done) tw.done(); }); // may queue follow-up tweens
+    }
+  });
+  function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+  function prism(pts, color, h) {
+    var s = new THREE.Shape(); pts.forEach(function (p, i) { if (i) s.lineTo(p[0], p[1]); else s.moveTo(p[0], p[1]); }); s.closePath();
+    var geo = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false });
+    var m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 }));
+    m.rotation.x = -Math.PI / 2; // extrude upwards; the bottom face lies on the ground plane
+    var edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: '#1b1b1b' }));
+    edges.raycast = function () {}; // outlines must not catch taps meant for neighbours
+    m.add(edges); return m;
+  }
+
+  function buildLab(parent) {
+    var lab = ent(parent, {});
+    lab.setAttribute('lab-tick', '');
+
+    // shared prompt panel and buttons (they live in front of whichever station is active)
+    var title = ent(lab, { position: '0 3.55 -4', ctext: 'text: مختبر الاكتشاف; w: 2.6; h: 0.5; bg: #12202c; fg: #f4b63c' });
+    var prompt = ent(lab, { position: '0 2.98 -3.95', ctext: 'text: ; w: 3.9; h: 0.7; bg: #12202c; fg: #fff8ea; size: 0.52' });
+    var sayBtn = ent(lab, { class: 'clickable', position: '0 0.25 -3.9', ctext: 'text: استمع; w: 0.8; h: 0.34; bg: #f4b63c; fg: #1d2b36' });
+    var current = '';
+    function ask(t, ttl) { current = t; prompt.setAttribute('ctext', 'text', t); if (ttl) title.setAttribute('ctext', 'text', ttl); speak(t); }
+    sayBtn.addEventListener('click', function () { if (tapOk()) speak(current, true); });
+    var choiceEls = [];
+    function choices(list, onPick) {
+      choiceEls.forEach(function (e) { e.parentNode && e.parentNode.removeChild(e); }); choiceEls = [];
+      list.forEach(function (c, i) {
+        var x = (list.length === 1 ? 0 : (i ? -1 : 1) * 0.95);
+        var b = ent(lab, { class: 'clickable', position: x + ' 2.35 -3.9', ctext: 'text: ' + c.t + '; w: 1.8; h: 0.42; bg: ' + (c.bg || '#fff8ea') + '; border: #1d2b36; fg: ' + (c.fg || '#1d2b36') + '; size: 0.45' });
+        b.addEventListener('click', function () { if (tapOk()) onPick(c, b); });
+        choiceEls.push(b);
+      });
+    }
+    function clearChoices() { choices([], null); }
+
+    // ===== Part 1: footprints in the sand (solid vs plane) =====
+    var partA = ent(lab, {});
+    var tray = ent(partA, { position: '0 1.0 -3.1', rotation: '58 0 0' });
+    ent(tray, { geometry: 'primitive: box; width: 3.7; height: 0.12; depth: 1.5', material: 'color: #8a5a2b', position: '0 -0.07 0' });
+    ent(tray, { geometry: 'primitive: plane; width: 3.5; height: 1.3', material: 'color: #f1dcae; roughness: 1', rotation: '-90 0 0', position: '0 0.001 0' });
+    var SOLIDS = ['square', 'circle', 'tri', 'hex', 'trap', 'para'], pressed = 0;
+    SOLIDS.forEach(function (k, i) {
+      var x = 1.45 - i * 0.58, pts = rotPts(U[k], 0, 0.21);
+      var holder = ent(tray, { class: 'clickable', position: x + ' 0.42 0' });
+      holder.dataset.solid = k;
+      holder.setObject3D('mesh', prism(pts, UCOL[k], 0.34));
+      var used = false;
+      holder.addEventListener('click', function () {
+        if (used || !tapOk()) return; used = true;
+        var o = holder.object3D;
+        tween(450, function (e) { o.position.y = 0.42 - 0.415 * e; }, function () {
+          var print = polyMesh(pts, UCOL[k], 0.02); print.rotation.x = -Math.PI / 2; print.position.set(x, 0.006, 0);
+          tray.object3D.add(print); beep(true);
+          tween(450, function (e) { o.position.y = 0.005 + 0.6 * e; }, function () {
+            tween(400, function (e) { var s = 1 - e; o.scale.set(Math.max(s, 0.001), Math.max(s, 0.001), Math.max(s, 0.001)); }, function () {
+              holder.classList.remove('clickable'); o.visible = false;
+              pressed++; if (pressed === SOLIDS.length) askFlat();
+            });
+          });
+        });
+      });
+    });
+    function startA() {
+      ask('المس كل مجسم ليضغط على الرمل.\nماذا يترك خلفه؟', 'آثار على الرمل');
+      clearChoices();
+    }
+    function askFlat() {
+      ask('قارن المجسم بالأثر الذي تركه على الرمل.\nماذا تلاحظ؟');
+      choices([{ t: 'الأثر مسطح، ليس له سُمك', ok: true }, { t: 'الأثر مجسم مثل الصندوق' }], function (c) {
+        if (!c.ok) { beep(false); toast('انظر مرة أخرى إلى الرمل: هل يرتفع الأثر عن الرمل مثل المجسم؟', 'no'); return; }
+        beep(true);
+        ask('أنت اكتشفت ذلك! الشكل المسطح اسمه «شكل مستوٍ».\nبعض الآثار تعرف اسمها، وثلاثة منها جديدة!');
+        choices([{ t: 'لنكتشف الأشكال الجديدة ◀', bg: '#3fbf6f', fg: '#ffffff' }], function () { startB(); });
+      });
+    }
+
+    // ===== Part 2: sort the shapes into families; each name appears only when its family is complete =====
+    var partB = ent(lab, {});
+    ent(partB, { geometry: 'primitive: box; width: 3.9; height: 2.25; depth: 0.08', material: 'color: #f5ecd7', position: '0 1.55 -4.06' });
+    ent(partB, { geometry: 'primitive: box; width: 4.1; height: 2.45; depth: 0.05', material: 'color: #8a5a2b', position: '0 1.55 -4.11' });
+    var FAMS = ['hex', 'trap', 'para', 'other'], baskets = {};
+    FAMS.forEach(function (f, i) {
+      var x = 1.42 - i * 0.95;
+      var b = ent(partB, { class: 'clickable', position: x + ' 0.98 -4.0' });
+      b.setAttribute('geometry', 'primitive: plane; width: 0.86; height: 0.78');
+      b.setAttribute('material', 'color: #e9d9b4; shader: flat');
+      var sample = ent(b, { position: '0 0.2 0.01' });
+      if (f !== 'other') sample.object3D.add(polyMesh(rotPts(U[f], 0, 0.17), UCOL[f], 0.02));
+      else sample.setAttribute('ctext', 'text: أشكال\nأعرفها; w: 0.7; h: 0.34; bg: none; fg: #5a4630');
+      var lbl = ent(partB, { position: x + ' 0.47 -3.98', ctext: 'text: ' + (f === 'other' ? 'ليست جديدة' : 'عائلة ؟') + '; w: 0.9; h: 0.26; bg: #12202c; fg: #f4b63c' });
+      baskets[f] = { el: b, lbl: lbl, x: x, n: 0, need: f === 'other' ? 3 : 3 };
+    });
+    // cards: same families in other sizes, colours and turns, plus three familiar shapes
+    var CARDS = [
+      ['para', 25, 0.15, '#2f86c9'], ['hex', 15, 0.12, '#e2483d'], ['trap', 180, 0.15, '#7cc63a'], ['rect', 30, 0.12, '#f2c230'],
+      ['para', -70, 0.11, '#f08a24'], ['trap', 90, 0.1, '#8b45c7'], ['hex', 0, 0.17, '#f2c230'], ['tri', 200, 0.12, '#1aa6a6'],
+      ['trap', 30, 0.13, '#e2483d'], ['para', 150, 0.13, '#7cc63a', -1], ['square', 45, 0.11, '#8b45c7'], ['hex', 40, 0.09, '#2f86c9']
+    ];
+    var selected = null, sorted = 0, cardEls = [];
+    CARDS.forEach(function (c, i) {
+      var col = i % 6, row = Math.floor(i / 6);
+      var x = 1.45 - col * 0.6 + (row ? 0.14 : 0), y = 2.3 - row * 0.5;
+      var e = ent(partB, { class: 'clickable', position: x.toFixed(2) + ' ' + y.toFixed(2) + ' -3.98' });
+      e.setObject3D('mesh', polyMesh(rotPts(U[c[0]], c[1], c[2] * 1.3, c[4] || 1), c[3], 0.02));
+      e.dataset.kind = c[0]; e.dataset.home = x + ' ' + y;
+      e.addEventListener('click', function () {
+        if (!tapOk() || e.dataset.done) return;
+        if (selected) selected.object3D.scale.set(1, 1, 1);
+        selected = e; e.object3D.scale.set(1.3, 1.3, 1.3); beep(true);
+        toast('الآن المس السلة التي ينتمي إليها هذا الشكل.');
+      });
+      cardEls.push(e);
+    });
+    FAMS.forEach(function (f) {
+      baskets[f].el.addEventListener('click', function () {
+        if (!tapOk()) return;
+        if (!selected) { toast('اختر شكلًا من الأعلى أولًا.'); return; }
+        var k = selected.dataset.kind, fam = (k === 'para' || k === 'hex' || k === 'trap') ? k : 'other';
+        var card = selected; selected = null; card.object3D.scale.set(1, 1, 1);
+        if (fam !== f) {
+          beep(false);
+          toast(f === 'other' ? 'هذا الشكل له عائلة بين السلال. أدره في خيالك وقارنه بأشكال السلال.' : 'ليس من هذه العائلة. أدر الشكل في خيالك وضعه فوق شكل السلة: هل يتطابقان؟', 'no');
+          return;
+        }
+        var bk = baskets[f], o = card.object3D, from = o.position.clone(), n = bk.n++;
+        var to = new THREE.Vector3(bk.x + (n - 1) * 0.24, 0.84, 0.02 + from.z);
+        card.dataset.done = '1'; card.classList.remove('clickable'); beep(true);
+        tween(500, function (e) { o.position.lerpVectors(from, to, e); var s = 1 - 0.45 * e; o.scale.set(s, s, 1); });
+        sorted++;
+        if (bk.n === bk.need) {
+          if (f === 'other') { toast('أحسنت! هذه أشكال تعرفها: مستطيل ومثلث ومربع.', 'ok'); bk.lbl.setAttribute('ctext', 'text', 'نعرفها'); }
+          else {
+            bk.lbl.setAttribute('ctext', 'text', NAMES[f]); bk.lbl.setAttribute('ctext', 'bg', '#3fbf6f'); bk.lbl.setAttribute('ctext', 'fg', '#ffffff');
+            toast('اكتشفت عائلة! كل أشكال هذه السلة اسمها: ' + NAMES[f] + '.', 'ok'); speak('كل أشكال هذه السلة اسمها ' + NAMES[f]);
+          }
+        }
+        if (sorted === CARDS.length) setTimeout(askName, 1400);
+      });
+    });
+    function startB() {
+      part = 'B'; setActive(partA, false); setActive(partB, true);
+      ask('أشكال مختلطة بألوان وأحجام واتجاهات مختلفة.\nالمس شكلًا، ثم السلة التي فيها شكل يشبهه.', 'افرز الأشكال');
+      clearChoices();
+    }
+    function askName() {
+      ask('في كل سلة أشكال بألوان وأحجام واتجاهات مختلفة.\nهل يتغيّر اسم الشكل إذا أدرناه أو كبّرناه أو غيّرنا لونه؟', 'ماذا اكتشفت؟');
+      choices([{ t: 'لا، يبقى اسمه كما هو', ok: true }, { t: 'نعم، يتغيّر اسمه' }], function (c) {
+        if (!c.ok) { beep(false); toast('انظر إلى سلة الشكل السداسي: أشكالها مختلفة الحجم واللون، فهل أسماؤها مختلفة؟', 'no'); return; }
+        beep(true);
+        ask('أنت اكتشفت القاعدة: اسم الشكل لا يتغيّر بتغيّر وضعه أو حجمه أو لونه.\nالآن جرّب اكتشافك في المحطات!', 'أحسنت!');
+        choices([{ t: 'إلى المحطات ◀', bg: '#3fbf6f', fg: '#ffffff' }], function () { setPhase('stations'); });
+      });
+    }
+
+    var part = 'A';
+    lab.__start = function () { setActive(partB, false); setActive(partA, true); startA(); };
+    lab.__refresh = function () { setActive(part === 'A' ? partB : partA, false); };
+    return lab;
+  }
+
+  // ---------- phases: learn → stations (practice) → workshop (create) ----------
+  var groups = {};
+  function setActive(group, on) {
+    group.setAttribute('visible', on);
+    group.querySelectorAll(on ? '.clickable-off' : '.clickable').forEach(function (e) {
+      e.classList.remove(on ? 'clickable-off' : 'clickable'); e.classList.add(on ? 'clickable' : 'clickable-off');
+    });
+  }
+  var phase = 'learn';
+  function setPhase(p) {
+    phase = p;
+    if (p === 'learn' || p === 'stations') {
+      setActive(groups.learn, p === 'learn'); setActive(groups.stations, p === 'stations'); face(0);
+      if (p === 'learn' && groups.lab && groups.lab.__refresh) groups.lab.__refresh();
+    } else face(180);
+    document.getElementById('mission').textContent = {
+      learn: '١) اكتشف: اضغط المجسمات على الرمل وانظر إلى آثارها، ثم افرز الأشكال في عائلاتها.',
+      stations: '٢) تدرّب: سمِّ شكل كل محطة، وشكلَي بدن سفينة البوم وشراعها.',
+      workshop: '٣) ابنِ: ارسم الشكل المطلوب على لوحة النقاط ليصير جزءًا من البيت.'
+    }[p];
+    ['phaseLearn', 'faceStations', 'faceWorkshop'].forEach(function (id, i) {
+      document.getElementById(id).setAttribute('aria-pressed', String(['learn', 'stations', 'workshop'][i] === p));
+    });
+  }
+
+  // ---------- HUD buttons and VR gaze ----------
+  function face(deg) {
+    var cam = document.getElementById('cam'), lc = cam.components['look-controls'];
+    if (lc) { lc.yawObject.rotation.y = deg * Math.PI / 180; lc.pitchObject.rotation.x = 0; }
+  }
+  document.getElementById('phaseLearn').addEventListener('click', function () { setPhase('learn'); });
+  document.getElementById('faceStations').addEventListener('click', function () { setPhase('stations'); });
+  document.getElementById('faceWorkshop').addEventListener('click', function () { setPhase('workshop'); });
+  document.getElementById('helpBtn').addEventListener('click', function () {
+    var h = document.getElementById('help'); h.hidden = !h.hidden; this.setAttribute('aria-expanded', String(!h.hidden));
+  });
+
+  var scene = document.getElementById('scene');
+  scene.addEventListener('enter-vr', function () {
+    dragged = false;
+    var g = document.getElementById('gaze'); g.setAttribute('visible', true); g.setAttribute('raycaster', 'enabled', true);
+  });
+  scene.addEventListener('exit-vr', function () {
+    var g = document.getElementById('gaze'); g.setAttribute('visible', false); g.setAttribute('raycaster', 'enabled', false);
+  });
+
+  function start() {
+    var world = document.getElementById('world');
+    buildSea(world);
+    groups.stations = ent(world, {}); buildStations(groups.stations);
+    groups.learn = ent(world, {}); var lab = buildLab(groups.learn); groups.lab = lab;
+    buildWorkshop(world);
+    // Outside an embedding frame (e.g. hosted on its own https link), let a tablet act as a window into the scene.
+    var top = false; try { top = window.self === window.top; } catch (e) {}
+    if (top) document.getElementById('cam').setAttribute('look-controls', 'magicWindowTrackingEnabled', true);
+    document.getElementById('loading').hidden = true;
+    setPhase('learn'); lab.__start();
+    window.__shapesReady = true;
+  }
+  var fontsReady = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('800 40px Cairo'), document.fonts.load('700 16px Cairo')]).catch(function () {}) : Promise.resolve();
+  var sceneReady = new Promise(function (res) { if (scene.hasLoaded) res(); else scene.addEventListener('loaded', res); });
+  Promise.all([fontsReady, sceneReady]).then(start);
+  window.__classify = classify;
+})();
+</script>
+
+</body></html>
